@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #0d0a07;
+  color: #ece6dd;
+  font-family: Inter, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Leaflet 地图容器与暗色主题适配 */
+.leaflet-container {
+  background: #14100c;
+  font: inherit;
+}
+.leaflet-control-attribution {
+  background: rgba(13, 10, 7, 0.75) !important;
+  color: #8a7f70 !important;
+}
+.leaflet-control-attribution a {
+  color: #c9944a !important;
+}
+.leaflet-bar a {
+  background: #1c1712 !important;
+  color: #e8b86d !important;
+  border-color: rgba(201, 148, 74, 0.25) !important;
+}
+
+/* 地图数字标记 */
+.tm-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 4px;
+  color: #0d0a07;
+  font-weight: 700;
+  font-size: 12px;
+  border: 2px solid rgba(13, 10, 7, 0.85);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* 拖拽视觉反馈 */
+.tm-drop-target {
+  outline: 2px dashed rgba(201, 148, 74, 0.6);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.tm-dragging {
+  opacity: 0.4;
+}

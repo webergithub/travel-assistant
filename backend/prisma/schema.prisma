@@ -1,0 +1,69 @@
+// 旅行助手数据模型
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // 生产可改为 postgresql
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  isGuest      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  trips Trip[]
+}
+
+model Trip {
+  id          String    @id @default(cuid())
+  title       String
+  destination String
+  startDate   DateTime?
+  days        Int       @default(3)
+  notes       String    @default("")
+  shareSlug   String?   @unique // 非空 = 已开启只读分享
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  items ItineraryItem[]
+
+  @@index([ownerId])
+}
+
+// 行程项：dayIndex = -1 表示「想去清单」，0..n-1 表示第几天
+model ItineraryItem {
+  id        String @id @default(cuid())
+  dayIndex  Int    @default(-1)
+  sortOrder Int    @default(0)
+  type      String @default("SIGHT") // SIGHT | FOOD | HOTEL | TRANSPORT | NOTE
+  title     String
+  note      String @default("")
+  startTime String @default("") // "09:30"
+  cost      Float  @default(0)
+  lat       Float?
+  lng       Float?
+  address   String @default("")
+  verified  String @default("NONE") // NONE | OK | FAIL — AI 生成地点的地图核验状态
+  source    String @default("USER") // USER | AI
+
+  tripId String
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+}
+
+// 地理编码结果缓存（Nominatim 限速 1req/s，缓存降低压力）
+model PlaceCache {
+  id         String   @id @default(cuid())
+  query      String   @unique
+  resultJson String
+  createdAt  DateTime @default(now())
+}
