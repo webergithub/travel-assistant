@@ -9,6 +9,7 @@ import { tripsRouter } from "./routes/trips.js";
 import { placesRouter } from "./routes/places.js";
 import { shareRouter } from "./routes/share.js";
 import { aiRouter } from "./routes/ai.js";
+import { weatherRouter } from "./routes/weather.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
@@ -26,6 +27,7 @@ app.use("/api/trips", tripsRouter);
 app.use("/api/places", placesRouter);
 app.use("/api/share", shareRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/weather", weatherRouter);
 
 // 生产环境：同进程托管已构建前端（public/），非 /api 请求回退 index.html（配合 HashRouter）
 const publicDir = path.join(process.cwd(), "public");

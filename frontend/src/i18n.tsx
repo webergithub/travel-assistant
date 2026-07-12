@@ -107,6 +107,19 @@ const ZH: Dict = {
   type_HOTEL: "住宿",
   type_TRANSPORT: "交通",
   type_NOTE: "备注",
+
+  // 导出
+  export_print: "🖨 打印 / PDF",
+  export_csv: "⬇ CSV",
+  print_total: "费用合计",
+  csv_day: "天",
+  csv_date: "日期",
+  csv_time: "时间",
+  csv_type: "类型",
+  csv_title: "名称",
+  csv_note: "备注",
+  csv_cost: "费用(元)",
+  csv_address: "地址",
 };
 
 const EN: Dict = {
@@ -203,6 +216,18 @@ const EN: Dict = {
   type_HOTEL: "Stay",
   type_TRANSPORT: "Transit",
   type_NOTE: "Note",
+
+  export_print: "🖨 Print / PDF",
+  export_csv: "⬇ CSV",
+  print_total: "Total cost",
+  csv_day: "Day",
+  csv_date: "Date",
+  csv_time: "Time",
+  csv_type: "Type",
+  csv_title: "Title",
+  csv_note: "Note",
+  csv_cost: "Cost (CNY)",
+  csv_address: "Address",
 };
 
 const DICTS: Record<Lang, Dict> = { zh: ZH, en: EN };

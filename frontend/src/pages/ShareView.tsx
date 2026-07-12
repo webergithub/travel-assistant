@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useI18n } from "../i18n";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
-import { dayColor, TYPE_ICONS, type Item } from "../types";
+import { useTripWeather } from "../components/useWeather";
+import { exportCsv, openPrintView } from "../export";
+import { dayColor, TYPE_ICONS, weatherText, type Item } from "../types";
 
 interface SharedTrip {
   title: string;
@@ -21,6 +23,7 @@ export default function ShareView() {
   const [items, setItems] = useState<Item[]>([]);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [error, setError] = useState("");
+  const weather = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
 
   useEffect(() => {
     if (!slug) return;
@@ -66,6 +69,20 @@ export default function ShareView() {
             {t("shared_by")} {trip.ownerName} ·{" "}
             <Link to="/" className="text-amber-300 hover:underline">{t("make_own")}</Link>
           </p>
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={() => openPrintView(trip, items, t, lang, weather)}
+              className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
+            >
+              {t("export_print")}
+            </button>
+            <button
+              onClick={() => exportCsv(trip, items, t, lang)}
+              className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
+            >
+              {t("export_csv")}
+            </button>
+          </div>
         </div>
 
         {(byDay.get(-1) || []).length > 0 && (
@@ -84,7 +101,9 @@ export default function ShareView() {
             <header className="flex items-center gap-2 mb-2 px-1">
               <span className="w-2.5 h-2.5 rounded-full" style={{ background: dayColor(d) }} />
               <h3 className="font-semibold text-sm">{t("day_n", { n: d + 1 })}</h3>
-              <span className="text-xs text-stone-500">{fmtDate(d)}</span>
+              <span className="text-xs text-stone-500">
+                {[fmtDate(d), weatherText(weather?.[d])].filter(Boolean).join(" · ")}
+              </span>
             </header>
             <div className="space-y-2">
               {(byDay.get(d) || []).map((it) => (

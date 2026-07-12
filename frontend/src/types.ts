@@ -63,6 +63,33 @@ export interface AiDraft {
   tips: string[];
 }
 
+export interface DayWeather {
+  date: string;
+  code: number; // WMO weather code
+  tmax: number;
+  tmin: number;
+}
+
+// WMO 天气代码 → 表情
+export function weatherIcon(code: number): string {
+  if (code === 0) return "☀️";
+  if (code <= 2) return "🌤";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫";
+  if (code <= 57) return "🌦";
+  if (code <= 67) return "🌧";
+  if (code <= 77) return "🌨";
+  if (code <= 82) return "🌧";
+  if (code <= 86) return "🌨";
+  if (code >= 95) return "⛈";
+  return "🌡";
+}
+
+export function weatherText(w: DayWeather | null | undefined): string {
+  if (!w) return "";
+  return `${weatherIcon(w.code)} ${Math.round(w.tmax)}°/${Math.round(w.tmin)}°`;
+}
+
 export const TYPE_ICONS: Record<ItemType, string> = {
   SIGHT: "🏛",
   FOOD: "🍜",

@@ -4,7 +4,9 @@ import { api } from "../api";
 import { useI18n } from "../i18n";
 import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
-import { dayColor, TYPE_ICONS, type AiDraft, type GeoPlace, type Item, type ItemType, type Trip } from "../types";
+import { useTripWeather } from "../components/useWeather";
+import { exportCsv, openPrintView } from "../export";
+import { dayColor, TYPE_ICONS, weatherText, type AiDraft, type GeoPlace, type Item, type ItemType, type Trip } from "../types";
 
 const TYPES: ItemType[] = ["SIGHT", "FOOD", "HOTEL", "TRANSPORT", "NOTE"];
 
@@ -266,6 +268,7 @@ export default function Editor() {
   }, [items]);
 
   const budget = useMemo(() => items.filter((i) => i.dayIndex >= 0).reduce((s, i) => s + i.cost, 0), [items]);
+  const weather = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
 
   if (!trip) return <p className="text-stone-500 p-10">{t("loading")}</p>;
 
@@ -468,6 +471,18 @@ export default function Editor() {
             {trip.shareSlug && (
               <button onClick={copyShare} className="text-xs text-stone-400 hover:text-amber-300">{t("copy_link")}</button>
             )}
+            <button
+              onClick={() => openPrintView(trip, items, t, lang, weather)}
+              className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
+            >
+              {t("export_print")}
+            </button>
+            <button
+              onClick={() => exportCsv(trip, items, t, lang)}
+              className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
+            >
+              {t("export_csv")}
+            </button>
           </div>
         </div>
 
@@ -540,7 +555,7 @@ export default function Editor() {
             key={d}
             dayIndex={d}
             title={t("day_n", { n: d + 1 })}
-            subtitle={fmtDayDate(trip.startDate, d, lang)}
+            subtitle={[fmtDayDate(trip.startDate, d, lang), weatherText(weather?.[d])].filter(Boolean).join(" · ")}
             items={byDay.get(d) || []}
             onDrop={dropTo}
             addForm={<AddItemForm compact onAdd={(title, type) => addItem(d, title, type)} />}

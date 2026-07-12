@@ -1,5 +1,5 @@
 // 统一 API 客户端：自动带 JWT 与（可选）用户自带 LLM key
-import type { AiDraft, GeoPlace, Item, PublicUser, Trip } from "./types";
+import type { AiDraft, DayWeather, GeoPlace, Item, PublicUser, Trip } from "./types";
 
 const TOKEN_KEY = "tripmate_token";
 const USER_KEY = "tripmate_user";
@@ -72,6 +72,9 @@ export const api = {
     request<{ items: Item[] }>(`/trips/${tripId}/reorder`, { method: "POST", body: JSON.stringify({ moves }) }),
 
   searchPlaces: (q: string) => request<{ results: GeoPlace[] }>(`/places/search?q=${encodeURIComponent(q)}`),
+
+  weather: (lat: number, lng: number, start: string, days: number) =>
+    request<{ days: (DayWeather | null)[] }>(`/weather?lat=${lat}&lng=${lng}&start=${start}&days=${days}`),
 
   getShared: (slug: string) =>
     request<{ trip: { title: string; destination: string; days: number; startDate: string | null; notes: string; ownerName: string }; items: Item[] }>(
