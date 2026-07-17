@@ -14,6 +14,11 @@ import { weatherRouter } from "./routes/weather.js";
 const app = express();
 const PORT = Number(process.env.PORT || 4100);
 
+// 兜底：async 路由里未捕获的 Promise 拒绝（如数据库故障）只记日志，不允许压垮进程
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
 app.use(express.json({ limit: "2mb" }));
 app.use(optionalAuth);
