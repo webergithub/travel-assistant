@@ -51,7 +51,7 @@ tripsRouter.get("/", async (req, res) => {
 
 tripsRouter.post("/", async (req, res) => {
   const parsed = tripSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, code: "VALIDATION" });
   const { title, destination, days, startDate, notes } = parsed.data;
   const trip = await prisma.trip.create({
     data: {
@@ -68,16 +68,16 @@ tripsRouter.post("/", async (req, res) => {
 
 tripsRouter.get("/:id", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const items = await prisma.itineraryItem.findMany({ where: { tripId: trip.id }, ...itemsOrdered });
   res.json({ trip, items });
 });
 
 tripsRouter.put("/:id", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const parsed = tripSchema.partial().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, code: "VALIDATION" });
   const { startDate, ...rest } = parsed.data;
   const updated = await prisma.trip.update({
     where: { id: trip.id },
@@ -86,12 +86,34 @@ tripsRouter.put("/:id", async (req, res) => {
       ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
     },
   });
-  res.json({ trip: updated });
+
+  // 天数收缩时把越界项移回想去清单（G-DATA-3），避免产生列表不可见的"孤儿项"
+  let movedToWishlist = 0;
+  if (parsed.data.days !== undefined && parsed.data.days < trip.days) {
+    const orphans = await prisma.itineraryItem.findMany({
+      where: { tripId: trip.id, dayIndex: { gte: parsed.data.days } },
+      orderBy: [{ dayIndex: "asc" }, { sortOrder: "asc" }],
+    });
+    if (orphans.length > 0) {
+      const max = await prisma.itineraryItem.aggregate({
+        where: { tripId: trip.id, dayIndex: -1 },
+        _max: { sortOrder: true },
+      });
+      let order = (max._max.sortOrder ?? -1) + 1;
+      await prisma.$transaction(
+        orphans.map((o) =>
+          prisma.itineraryItem.update({ where: { id: o.id }, data: { dayIndex: -1, sortOrder: order++ } })
+        )
+      );
+      movedToWishlist = orphans.length;
+    }
+  }
+  res.json({ trip: updated, movedToWishlist });
 });
 
 tripsRouter.delete("/:id", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   await prisma.trip.delete({ where: { id: trip.id } });
   res.json({ ok: true });
 });
@@ -99,7 +121,7 @@ tripsRouter.delete("/:id", async (req, res) => {
 // 开启/关闭只读分享链接
 tripsRouter.post("/:id/share", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const enable = Boolean(req.body?.enable);
   const updated = await prisma.trip.update({
     where: { id: trip.id },
@@ -112,9 +134,9 @@ tripsRouter.post("/:id/share", async (req, res) => {
 
 tripsRouter.post("/:id/items", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const parsed = itemSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, code: "VALIDATION" });
   const max = await prisma.itineraryItem.aggregate({
     where: { tripId: trip.id, dayIndex: parsed.data.dayIndex },
     _max: { sortOrder: true },
@@ -128,11 +150,11 @@ tripsRouter.post("/:id/items", async (req, res) => {
 // AI 草稿批量落库（追加或替换）
 tripsRouter.post("/:id/items/bulk", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const body = z
     .object({ mode: z.enum(["append", "replace"]).default("append"), items: z.array(itemSchema).max(200) })
     .safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: body.error.issues[0].message });
+  if (!body.success) return res.status(400).json({ error: body.error.issues[0].message, code: "VALIDATION" });
 
   await prisma.$transaction(async (tx) => {
     if (body.data.mode === "replace") {
@@ -159,9 +181,9 @@ tripsRouter.post("/:id/items/bulk", async (req, res) => {
 
 tripsRouter.put("/:id/items/:itemId", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const parsed = itemSchema.partial().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, code: "VALIDATION" });
   const found = await prisma.itineraryItem.findFirst({ where: { id: req.params.itemId, tripId: trip.id } });
   if (!found) return res.status(404).json({ error: "行程项不存在" });
   const item = await prisma.itineraryItem.update({ where: { id: found.id }, data: parsed.data });
@@ -170,7 +192,7 @@ tripsRouter.put("/:id/items/:itemId", async (req, res) => {
 
 tripsRouter.delete("/:id/items/:itemId", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   await prisma.itineraryItem.deleteMany({ where: { id: req.params.itemId, tripId: trip.id } });
   res.json({ ok: true });
 });
@@ -178,13 +200,13 @@ tripsRouter.delete("/:id/items/:itemId", async (req, res) => {
 // 拖拽/排序后的批量位置更新
 tripsRouter.post("/:id/reorder", async (req, res) => {
   const trip = await ownTrip(req.params.id, req.user!.id);
-  if (!trip) return res.status(404).json({ error: "行程不存在" });
+  if (!trip) return res.status(404).json({ error: "行程不存在", code: "TRIP_NOT_FOUND" });
   const body = z
     .object({
       moves: z.array(z.object({ id: z.string(), dayIndex: z.number().int().min(-1), sortOrder: z.number().int().min(0) })).max(300),
     })
     .safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: body.error.issues[0].message });
+  if (!body.success) return res.status(400).json({ error: body.error.issues[0].message, code: "VALIDATION" });
 
   await prisma.$transaction(
     body.data.moves.map((m) =>

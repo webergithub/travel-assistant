@@ -13,12 +13,12 @@ const qSchema = z.object({
 
 weatherRouter.get("/", async (req, res) => {
   const parsed = qSchema.safeParse(req.query);
-  if (!parsed.success) return res.status(400).json({ error: "参数不合法" });
+  if (!parsed.success) return res.status(400).json({ error: "参数不合法", code: "VALIDATION" });
   const { lat, lng, start, days } = parsed.data;
   try {
     const forecast = await getForecast(lat, lng, start, days);
     res.json({ days: forecast });
   } catch (e: any) {
-    res.status(502).json({ error: "天气服务暂不可用", detail: String(e?.message || e) });
+    res.status(502).json({ error: "天气服务暂不可用", code: "WEATHER_UNAVAILABLE", detail: String(e?.message || e) });
   }
 });

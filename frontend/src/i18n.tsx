@@ -120,6 +120,29 @@ const ZH: Dict = {
   csv_note: "备注",
   csv_cost: "费用(元)",
   csv_address: "地址",
+
+  // 服务端错误码翻译（G-UX-1）
+  err_UNAUTHORIZED: "需要登录",
+  err_TRIP_NOT_FOUND: "行程不存在或已删除",
+  err_EMAIL_TAKEN: "该邮箱已注册",
+  err_BAD_CREDENTIALS: "邮箱或密码错误",
+  err_VALIDATION: "输入不合法，请检查后重试",
+  err_SHARE_NOT_FOUND: "分享链接不存在或已关闭",
+  err_GEO_UNAVAILABLE: "地点搜索服务暂不可用，请稍后再试",
+  err_WEATHER_UNAVAILABLE: "天气服务暂不可用",
+  err_NO_API_KEY: "未配置 LLM。点右上角 🔑 填入你的 Claude API Key，或试试演示模式。",
+  err_BAD_AI_JSON: "AI 输出解析失败，请重试",
+  err_AI_FAILED: "AI 调用失败",
+  err_RATE_LIMITED: "操作太频繁，请稍后再试",
+  err_NETWORK: "网络异常，请检查连接后重试",
+
+  // 降级可见 & 演示模式（G-UX-2 / G-AI-1 / G-AI-2）
+  ai_demo_btn: "▶ 没有 Key？用演示数据体验流程",
+  ai_days_capped: "AI 单次最多生成 10 天，本次将生成第 1–10 天",
+  weather_unavail: "🌡 天气暂不可用",
+  print_blocked: "浏览器拦截了打印窗口，请允许弹窗后重试",
+  copy_manual: "自动复制失败，请手动复制链接",
+  moved_wish: "已把超出天数的 {n} 项安排移回想去清单",
 };
 
 const EN: Dict = {
@@ -228,6 +251,27 @@ const EN: Dict = {
   csv_note: "Note",
   csv_cost: "Cost (CNY)",
   csv_address: "Address",
+
+  err_UNAUTHORIZED: "Please sign in",
+  err_TRIP_NOT_FOUND: "Trip not found or deleted",
+  err_EMAIL_TAKEN: "This email is already registered",
+  err_BAD_CREDENTIALS: "Wrong email or password",
+  err_VALIDATION: "Invalid input — please check and retry",
+  err_SHARE_NOT_FOUND: "This share link doesn't exist or was disabled",
+  err_GEO_UNAVAILABLE: "Place search is temporarily unavailable — try again later",
+  err_WEATHER_UNAVAILABLE: "Weather service is unavailable",
+  err_NO_API_KEY: "No LLM configured. Click 🔑 top-right to add your Claude API Key, or try demo mode.",
+  err_BAD_AI_JSON: "AI output could not be parsed — please retry",
+  err_AI_FAILED: "AI call failed",
+  err_RATE_LIMITED: "Too many requests — please slow down",
+  err_NETWORK: "Network error — check your connection and retry",
+
+  ai_demo_btn: "▶ No key? Walk through with demo data",
+  ai_days_capped: "AI generates at most 10 days per run — this run covers days 1–10",
+  weather_unavail: "🌡 Weather unavailable",
+  print_blocked: "The print window was blocked — allow pop-ups and retry",
+  copy_manual: "Auto-copy failed — please copy the link manually",
+  moved_wish: "Moved {n} item(s) beyond the new length back to the wishlist",
 };
 
 const DICTS: Record<Lang, Dict> = { zh: ZH, en: EN };
@@ -263,3 +307,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 }
 
 export const useI18n = () => useContext(Ctx);
+
+// 把 API 错误翻成当前语言：有 err_<code> 词条用词条，否则退回服务端原文
+export function apiErrText(e: any, t: I18nCtx["t"]): string {
+  if (e?.code) {
+    const key = `err_${e.code}`;
+    const s = t(key);
+    if (s !== key) return s;
+  }
+  return e?.message || String(e);
+}

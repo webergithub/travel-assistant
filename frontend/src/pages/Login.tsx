@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { useI18n } from "../i18n";
+import { apiErrText, useI18n } from "../i18n";
 
 export default function Login() {
   const { t, lang } = useI18n();
@@ -27,7 +27,7 @@ export default function Login() {
       loginWith(r.token, r.user);
       nav("/");
     } catch (err: any) {
-      setError(err.message);
+      setError(apiErrText(err, t));
     } finally {
       setBusy(false);
     }
@@ -39,7 +39,7 @@ export default function Login() {
       await guest(lang);
       nav("/");
     } catch (err: any) {
-      setError(err.message);
+      setError(apiErrText(err, t));
     } finally {
       setBusy(false);
     }

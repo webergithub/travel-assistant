@@ -29,7 +29,14 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
 
   // BASE_URL: dev="/"；prod="/travel/"（nginx 反代剥前缀）
   const base = `${import.meta.env.BASE_URL}api`.replace(/\/\/+/, "/");
-  const res = await fetch(`${base}${path}`, { ...opts, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, { ...opts, headers });
+  } catch {
+    const err: any = new Error("网络异常");
+    err.code = "NETWORK";
+    throw err;
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err: any = new Error(data.error || `请求失败 (${res.status})`);
@@ -55,7 +62,7 @@ export const api = {
     request<{ trip: Trip }>("/trips", { method: "POST", body: JSON.stringify(body) }),
   getTrip: (id: string) => request<{ trip: Trip; items: Item[] }>(`/trips/${id}`),
   updateTrip: (id: string, body: Partial<Pick<Trip, "title" | "destination" | "days" | "notes"> & { startDate: string | null }>) =>
-    request<{ trip: Trip }>(`/trips/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    request<{ trip: Trip; movedToWishlist?: number }>(`/trips/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteTrip: (id: string) => request<{ ok: boolean }>(`/trips/${id}`, { method: "DELETE" }),
   shareTrip: (id: string, enable: boolean) =>
     request<{ shareSlug: string | null }>(`/trips/${id}/share`, { method: "POST", body: JSON.stringify({ enable }) }),
@@ -81,7 +88,7 @@ export const api = {
       `/share/${slug}`
     ),
 
-  aiItinerary: (body: { destination: string; days: number; prefs?: string; lang: "zh" | "en" }) => {
+  aiItinerary: (body: { destination: string; days: number; prefs?: string; lang: "zh" | "en"; demo?: boolean }) => {
     const headers: Record<string, string> = {};
     const k = store.getApiKey();
     if (k) headers["x-user-api-key"] = k;

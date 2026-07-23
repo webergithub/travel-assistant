@@ -39,7 +39,12 @@ export function exportCsv(trip: ExportTrip, items: Item[], t: T, lang: string) {
     t("csv_day"), t("csv_date"), t("csv_time"), t("csv_type"),
     t("csv_title"), t("csv_note"), t("csv_cost"), t("csv_address"),
   ];
-  const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  // 防 CSV 公式注入（G-SEC-1）：= + - @ 开头的值前缀单引号，Excel 按文本处理
+  const q = (v: string | number) => {
+    let s = String(v).replace(/"/g, '""');
+    if (/^[=+\-@]/.test(s)) s = `'${s}`;
+    return `"${s}"`;
+  };
   const rows = scheduled(items).map((i) =>
     [
       t("day_n", { n: i.dayIndex + 1 }),
@@ -67,13 +72,14 @@ export function exportCsv(trip: ExportTrip, items: Item[], t: T, lang: string) {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// 返回 false = 弹窗被拦截，调用方应提示用户（G-UX-2）
 export function openPrintView(
   trip: ExportTrip,
   items: Item[],
   t: T,
   lang: string,
   weather: (DayWeather | null)[] | null
-) {
+): boolean {
   const list = scheduled(items);
   const total = list.reduce((s, i) => s + i.cost, 0);
 
@@ -129,7 +135,8 @@ ${total > 0 ? `<div class="total">${esc(t("print_total"))}: <b>¥${Math.round(to
 </body></html>`;
 
   const w = window.open("", "_blank");
-  if (!w) return;
+  if (!w) return false;
   w.document.write(html);
   w.document.close();
+  return true;
 }

@@ -61,6 +61,7 @@ export interface DraftItem {
 export interface AiDraft {
   days: { day: number; theme: string; items: DraftItem[] }[];
   tips: string[];
+  demo?: boolean;
 }
 
 export interface DayWeather {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useI18n } from "../i18n";
+import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
 import { useTripWeather } from "../components/useWeather";
 import { exportCsv, openPrintView } from "../export";
@@ -23,7 +24,8 @@ export default function ShareView() {
   const [items, setItems] = useState<Item[]>([]);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [error, setError] = useState("");
-  const weather = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
+  const { toast } = useToast();
+  const { data: weather } = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
 
   useEffect(() => {
     if (!slug) return;
@@ -71,7 +73,7 @@ export default function ShareView() {
           </p>
           <div className="flex items-center gap-2 mt-2">
             <button
-              onClick={() => openPrintView(trip, items, t, lang, weather)}
+              onClick={() => { if (!openPrintView(trip, items, t, lang, weather)) toast(t("print_blocked")); }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
             >
               {t("export_print")}

@@ -9,7 +9,7 @@ shareRouter.get("/:slug", async (req, res) => {
     where: { shareSlug: req.params.slug },
     include: { owner: { select: { displayName: true } } },
   });
-  if (!trip) return res.status(404).json({ error: "分享链接不存在或已关闭" });
+  if (!trip) return res.status(404).json({ error: "分享链接不存在或已关闭", code: "SHARE_NOT_FOUND" });
   const items = await prisma.itineraryItem.findMany({
     where: { tripId: trip.id },
     orderBy: [{ dayIndex: "asc" }, { sortOrder: "asc" }],

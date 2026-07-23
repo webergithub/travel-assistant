@@ -30,6 +30,47 @@ export interface ItineraryDraft {
   tips: string[];
 }
 
+// 演示模式（G-AI-2/PR-P1-1）：不调用 LLM，返回按目的地参数化的固定样例草稿。
+// 用途：平台未配 key 时让访客完整体验「生成→预览→应用」流程，同时作为测试夹具。
+export function mockItinerary(destination: string, days: number, lang: "zh" | "en"): ItineraryDraft {
+  const zh = lang === "zh";
+  const tpl: Omit<DraftItem, "searchQuery">[][] = [
+    [
+      { type: "SIGHT", title: zh ? `${destination}地标广场` : `${destination} Landmark Square`, note: zh ? "上午打卡，建议 2 小时" : "Morning visit, ~2h", startTime: "09:00", cost: 0 },
+      { type: "FOOD", title: zh ? "本地招牌午餐" : "Local signature lunch", note: zh ? "尝当地特色" : "Try the local specialty", startTime: "12:00", cost: 60 },
+      { type: "SIGHT", title: zh ? `${destination}历史街区` : `${destination} Old Town`, note: zh ? "下午漫步" : "Afternoon stroll", startTime: "14:00", cost: 0 },
+      { type: "NOTE", title: zh ? "傍晚休整" : "Evening rest", note: zh ? "回酒店休息，附近晚餐" : "Back to hotel, dinner nearby", startTime: "18:00", cost: 80 },
+    ],
+    [
+      { type: "SIGHT", title: zh ? `${destination}博物馆` : `${destination} Museum`, note: zh ? "了解本地历史，约 3 小时" : "Local history, ~3h", startTime: "09:30", cost: 40 },
+      { type: "FOOD", title: zh ? "老字号小吃街" : "Classic food street", note: zh ? "边走边吃" : "Street food crawl", startTime: "12:30", cost: 50 },
+      { type: "SIGHT", title: zh ? "城市观景台" : "City viewpoint", note: zh ? "黄昏景色最佳" : "Best at dusk", startTime: "16:30", cost: 30 },
+    ],
+    [
+      { type: "TRANSPORT", title: zh ? "近郊一日往返" : "Day trip to outskirts", note: zh ? "公共交通约 1 小时" : "~1h by public transit", startTime: "08:30", cost: 20 },
+      { type: "SIGHT", title: zh ? "自然风景区" : "Nature park", note: zh ? "徒步 + 野餐" : "Hike + picnic", startTime: "10:00", cost: 25 },
+      { type: "FOOD", title: zh ? "返程特色晚餐" : "Dinner back in town", note: zh ? "提前订位" : "Reserve ahead", startTime: "19:00", cost: 100 },
+    ],
+  ];
+  const out: DraftDay[] = [];
+  for (let d = 0; d < Math.min(days, 10); d++) {
+    const base = tpl[d % tpl.length];
+    out.push({
+      day: d + 1,
+      theme: zh ? `演示：第 ${d + 1} 天` : `Demo: day ${d + 1}`,
+      items: base.map((it) => ({ ...it, searchQuery: "" })),
+    });
+  }
+  return {
+    days: out,
+    tips: [
+      zh
+        ? "⚠ 这是演示数据，未调用 AI、未做地图核验。配置 Claude API Key 后可生成真实行程。"
+        : "⚠ Demo data — no AI call, no map verification. Add a Claude API Key for real itineraries.",
+    ],
+  };
+}
+
 // 用户自带 key 优先；兼容普通 API Key 与 OAuth 订阅令牌
 function resolveClient(userApiKey?: string): Anthropic {
   const key = userApiKey || process.env.ANTHROPIC_API_KEY;

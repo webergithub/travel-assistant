@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../auth.js";
-import { generateItinerary, type ItineraryDraft } from "../llm.js";
+import { generateItinerary, mockItinerary, type ItineraryDraft } from "../llm.js";
 import { verifyPlace } from "../geocode.js";
+import { rateLimit } from "../rateLimit.js";
 
 export const aiRouter = Router();
 aiRouter.use(requireAuth);
@@ -12,33 +13,48 @@ const reqSchema = z.object({
   days: z.number().int().min(1).max(10),
   prefs: z.string().max(500).optional(),
   lang: z.enum(["zh", "en"]).default("zh"),
+  demo: z.boolean().optional(), // true = 演示模式：不调 LLM、不核验
 });
 
 // 需要地图核验的类型（NOTE/TRANSPORT 不是具体地点）
 const VERIFIABLE = new Set(["SIGHT", "FOOD", "HOTEL"]);
 const MAX_VERIFY = 40; // 核验总量上限（Nominatim 1req/s，防止超长等待）
 
+// 按用户限流：防平台 key 被薅（G-OPS-3）；演示模式不占额度
+const aiLimiter = rateLimit({ windowMs: 3600_000, max: 10, key: (req) => `ai:${req.user?.id || "anon"}` });
+
 // 生成 → 逐项核验 → 返回草稿（不落库；由前端确认后 bulk 写入）
 aiRouter.post("/itinerary", async (req, res) => {
   const parsed = reqSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, code: "VALIDATION" });
 
   const userApiKey = (req.headers["x-user-api-key"] as string | undefined)?.trim() || undefined;
+  const isDemo = parsed.data.demo === true;
 
   let draft: ItineraryDraft;
-  try {
-    draft = await generateItinerary({ ...parsed.data, userApiKey });
-  } catch (e: any) {
-    if (e?.code === "NO_API_KEY") {
-      return res.status(402).json({ error: "未配置 LLM Key", code: "NO_API_KEY" });
+  if (isDemo) {
+    draft = mockItinerary(parsed.data.destination, parsed.data.days, parsed.data.lang);
+  } else {
+    // 真实生成走限流（同步中间件：未放行即已回复 429）
+    let allowed = false;
+    aiLimiter(req, res, () => (allowed = true));
+    if (!allowed) return;
+    try {
+      draft = await generateItinerary({ ...parsed.data, userApiKey });
+    } catch (e: any) {
+      if (e?.code === "NO_API_KEY") {
+        return res.status(402).json({ error: "未配置 LLM Key", code: "NO_API_KEY" });
+      }
+      if (e?.code === "BAD_AI_JSON") {
+        return res.status(502).json({ error: "AI 输出解析失败，请重试", code: "BAD_AI_JSON" });
+      }
+      return res
+        .status(502)
+        .json({ error: `AI 调用失败: ${String(e?.message || e).slice(0, 200)}`, code: "AI_FAILED" });
     }
-    if (e?.code === "BAD_AI_JSON") {
-      return res.status(502).json({ error: "AI 输出解析失败，请重试", code: "BAD_AI_JSON" });
-    }
-    return res.status(502).json({ error: `AI 调用失败: ${String(e?.message || e).slice(0, 200)}` });
   }
 
-  // 防幻觉核验：AI 推荐的每个具体地点都到地图上找一遍
+  // 防幻觉核验：AI 推荐的每个具体地点都到地图上找一遍（演示模式跳过，verified 保持 NONE）
   let verifiedCount = 0;
   const out = [];
   for (const day of draft.days) {
@@ -58,7 +74,7 @@ aiRouter.post("/itinerary", async (req, res) => {
         verified: "NONE" as "NONE" | "OK" | "FAIL",
       };
       if (!base.title) continue;
-      if (VERIFIABLE.has(base.type) && verifiedCount < MAX_VERIFY) {
+      if (!isDemo && VERIFIABLE.has(base.type) && verifiedCount < MAX_VERIFY) {
         verifiedCount++;
         const q = String(it.searchQuery || `${base.title} ${parsed.data.destination}`).slice(0, 120);
         const v = await verifyPlace(q);
@@ -76,5 +92,5 @@ aiRouter.post("/itinerary", async (req, res) => {
     out.push({ day: Number(day.day) || 1, theme: String(day.theme || ""), items });
   }
 
-  res.json({ days: out, tips: draft.tips.map((t) => String(t)).slice(0, 8) });
+  res.json({ days: out, tips: draft.tips.map((t) => String(t)).slice(0, 8), demo: isDemo });
 });

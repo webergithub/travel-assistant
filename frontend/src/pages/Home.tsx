@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { useI18n } from "../i18n";
+import { apiErrText, useI18n } from "../i18n";
 import { useToast } from "../components/toast";
 import type { Trip } from "../types";
 
@@ -27,7 +27,7 @@ function NewTripModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       });
       onCreated(trip);
     } catch (err: any) {
-      toast(err.message);
+      toast(apiErrText(err, t));
       setBusy(false);
     }
   };
@@ -102,7 +102,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) return;
-    api.listTrips().then((r) => setTrips(r.trips)).catch((e) => toast(e.message));
+    api.listTrips().then((r) => setTrips(r.trips)).catch((e) => toast(apiErrText(e, t)));
   }, [user]);
 
   const del = async (id: string) => {
@@ -115,7 +115,7 @@ export default function Home() {
     try {
       await guest(lang);
     } catch (e: any) {
-      toast(e.message);
+      toast(apiErrText(e, t));
     }
   };
 

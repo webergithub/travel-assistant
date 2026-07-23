@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
-import { useI18n } from "../i18n";
+import { apiErrText, useI18n } from "../i18n";
 import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
 import { useTripWeather } from "../components/useWeather";
@@ -252,7 +252,7 @@ export default function Editor() {
       .getTrip(id)
       .then((r) => { setTrip(r.trip); setItems(r.items); })
       .catch((e) => {
-        toast(e.message);
+        toast(apiErrText(e, t));
         nav(e.status === 401 ? "/login" : "/");
       });
   }, [id]);
@@ -268,16 +268,23 @@ export default function Editor() {
   }, [items]);
 
   const budget = useMemo(() => items.filter((i) => i.dayIndex >= 0).reduce((s, i) => s + i.cost, 0), [items]);
-  const weather = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
+  const { data: weather, failed: weatherFailed } = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
+  const err = (e: any) => apiErrText(e, t);
 
   if (!trip) return <p className="text-stone-500 p-10">{t("loading")}</p>;
 
   const saveTrip = async (patch: Parameters<typeof api.updateTrip>[1]) => {
     try {
-      const { trip: updated } = await api.updateTrip(trip.id, patch);
+      const { trip: updated, movedToWishlist } = await api.updateTrip(trip.id, patch);
       setTrip((prev) => ({ ...prev!, ...updated }));
+      // 天数收缩把越界项移回了想去清单：刷新列表并明示（G-DATA-3）
+      if (movedToWishlist && movedToWishlist > 0) {
+        const { items: fresh } = await api.getTrip(trip.id);
+        setItems(fresh);
+        toast(t("moved_wish", { n: movedToWishlist }));
+      }
     } catch (e: any) {
-      toast(e.message);
+      toast(err(e));
     }
   };
 
@@ -292,13 +299,20 @@ export default function Editor() {
       setItems((prev) => [...prev, item]);
       if (place) setFocus({ lat: place.lat, lng: place.lng, label: place.name });
     } catch (e: any) {
-      toast(e.message);
+      toast(err(e));
     }
   };
 
+  // 乐观删除 + 失败回滚（G-UX-3）
   const delItem = async (item: Item) => {
-    setItems((prev) => prev.filter((x) => x.id !== item.id));
-    api.deleteItem(trip.id, item.id).catch((e) => toast(e.message));
+    const prev = items;
+    setItems((p) => p.filter((x) => x.id !== item.id));
+    try {
+      await api.deleteItem(trip.id, item.id);
+    } catch (e: any) {
+      setItems(prev);
+      toast(err(e));
+    }
   };
 
   const saveItem = async (item: Item, patch: Partial<Item>) => {
@@ -306,7 +320,7 @@ export default function Editor() {
       const { item: updated } = await api.updateItem(trip.id, item.id, patch);
       setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
     } catch (e: any) {
-      toast(e.message);
+      toast(err(e));
     }
   };
 
@@ -321,7 +335,7 @@ export default function Editor() {
       const { items: fresh } = await api.reorder(trip.id, [{ id: itemId, dayIndex, sortOrder: newOrder }]);
       setItems(fresh);
     } catch (e: any) {
-      toast(e.message);
+      toast(err(e));
     }
   };
 
@@ -341,7 +355,7 @@ export default function Editor() {
         return m ? { ...x, sortOrder: m.sortOrder } : x;
       })
     );
-    api.reorder(trip.id, moves).then((r) => setItems(r.items)).catch((e) => toast(e.message));
+    api.reorder(trip.id, moves).then((r) => setItems(r.items)).catch((e) => toast(err(e)));
   };
 
   const doSearch = async (e: React.FormEvent) => {
@@ -355,8 +369,8 @@ export default function Editor() {
       const { results: r } = await api.searchPlaces(query);
       setResults(r);
       if (r[0]) setFocus({ lat: r[0].lat, lng: r[0].lng, label: r[0].name });
-    } catch (err: any) {
-      toast(err.message);
+    } catch (e: any) {
+      toast(err(e));
     } finally {
       setSearching(false);
     }
@@ -369,31 +383,39 @@ export default function Editor() {
       setTrip((prev) => ({ ...prev!, shareSlug }));
       if (shareSlug) {
         const url = `${location.origin}${location.pathname}#/s/${shareSlug}`;
-        await navigator.clipboard.writeText(url).catch(() => {});
-        toast(t("share_on"));
+        const copied = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
+        toast(copied ? t("share_on") : t("copy_manual"));
+        if (!copied) window.prompt(t("copy_manual"), url); // 剪贴板被拒时给可手动复制的兜底
       } else {
         toast(t("share_off"));
       }
     } catch (e: any) {
-      toast(e.message);
+      toast(err(e));
     }
   };
 
   const copyShare = async () => {
     if (!trip.shareSlug) return;
     const url = `${location.origin}${location.pathname}#/s/${trip.shareSlug}`;
-    await navigator.clipboard.writeText(url).catch(() => {});
-    toast(t("copied"));
+    const copied = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
+    if (copied) toast(t("copied"));
+    else window.prompt(t("copy_manual"), url);
   };
 
-  const runAi = async () => {
+  const runAi = async (demo = false) => {
     setAiBusy(true);
     setAiDraft(null);
     try {
-      const draft = await api.aiItinerary({ destination: trip.destination, days: Math.min(trip.days, 10), prefs: aiPrefs || undefined, lang });
+      const draft = await api.aiItinerary({
+        destination: trip.destination,
+        days: Math.min(trip.days, 10),
+        prefs: aiPrefs || undefined,
+        lang,
+        ...(demo ? { demo: true } : {}),
+      });
       setAiDraft(draft);
     } catch (e: any) {
-      toast(e.code === "NO_API_KEY" ? t("toast_no_key") : `${t("toast_ai_fail")}: ${e.message}`);
+      toast(err(e));
     } finally {
       setAiBusy(false);
     }
@@ -410,7 +432,7 @@ export default function Editor() {
       setAiOpen(false);
       toast(t("ai_applied"));
     } catch (e: any) {
-      toast(e.message);
+      toast(err(e));
     }
   };
 
@@ -472,7 +494,7 @@ export default function Editor() {
               <button onClick={copyShare} className="text-xs text-stone-400 hover:text-amber-300">{t("copy_link")}</button>
             )}
             <button
-              onClick={() => openPrintView(trip, items, t, lang, weather)}
+              onClick={() => { if (!openPrintView(trip, items, t, lang, weather)) toast(t("print_blocked")); }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
             >
               {t("export_print")}
@@ -483,6 +505,7 @@ export default function Editor() {
             >
               {t("export_csv")}
             </button>
+            {weatherFailed && <span className="text-[11px] text-stone-500">{t("weather_unavail")}</span>}
           </div>
         </div>
 
@@ -596,6 +619,7 @@ export default function Editor() {
           </header>
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             <p className="text-xs text-stone-400 leading-relaxed">{t("ai_desc")}</p>
+            {trip.days > 10 && <p className="text-xs text-orange-300">{t("ai_days_capped")}</p>}
             <div>
               <label className="text-xs text-stone-400">{t("ai_prefs")}</label>
               <textarea
@@ -607,11 +631,18 @@ export default function Editor() {
               />
             </div>
             <button
-              onClick={runAi}
+              onClick={() => runAi(false)}
               disabled={aiBusy}
               className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-black font-semibold text-sm disabled:opacity-60"
             >
               {aiBusy ? t("ai_generating") : t("ai_generate")}
+            </button>
+            <button
+              onClick={() => runAi(true)}
+              disabled={aiBusy}
+              className="w-full py-1.5 text-xs text-stone-500 hover:text-amber-300 disabled:opacity-60"
+            >
+              {t("ai_demo_btn")}
             </button>
 
             {aiDraft && (
