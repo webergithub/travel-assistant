@@ -5,7 +5,7 @@ import { apiErrText, useI18n } from "../i18n";
 import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
 import { useTripWeather } from "../components/useWeather";
-import { exportCsv, openPrintView } from "../export";
+import { exportCsv, isWeChat, openPrintView } from "../export";
 import { dayColor, TYPE_ICONS, weatherText, type AiDraft, type GeoPlace, type Item, type ItemType, type Trip } from "../types";
 
 const TYPES: ItemType[] = ["SIGHT", "FOOD", "HOTEL", "TRANSPORT", "NOTE"];
@@ -24,6 +24,8 @@ function ItemCard({
   onSave,
   onFocus,
   onMove,
+  onMoveTo,
+  tripDays,
   draggable,
 }: {
   item: Item;
@@ -31,10 +33,13 @@ function ItemCard({
   onSave: (patch: Partial<Item>) => void;
   onFocus: () => void;
   onMove: (dir: -1 | 1) => void;
+  onMoveTo: (dayIndex: number) => void; // 触屏友好的跨天移动（G-MOB-1）
+  tripDays: number;
   draggable: boolean;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [form, setForm] = useState({ title: item.title, note: item.note, startTime: item.startTime, cost: item.cost, type: item.type });
 
   useEffect(() => {
@@ -119,14 +124,50 @@ function ItemCard({
             )}
             {item.verified === "OK" && <span className="text-[10px] text-emerald-400">{t("verified_ok")}</span>}
             {item.verified === "FAIL" && <span className="text-[10px] text-orange-400">{t("verified_fail")}</span>}
+            {item.verified === "UNVERIFIED" && <span className="text-[10px] text-stone-400">{t("verified_unverified")}</span>}
           </div>
           {item.note && <p className="text-xs text-stone-400 mt-1 leading-relaxed">{item.note}</p>}
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => onMove(-1)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="↑">↑</button>
-          <button onClick={() => onMove(1)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="↓">↓</button>
-          <button onClick={() => setEditing(true)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="✏️">✏️</button>
-          <button onClick={onDelete} className="text-stone-500 hover:text-red-400 text-xs px-1" title={t("del")}>🗑</button>
+        {/* ⇄ 常显（触屏无 hover）；其余按钮 hover 显示 */}
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div className="relative">
+            <button
+              onClick={() => setMoveOpen((v) => !v)}
+              className="text-stone-500 hover:text-amber-300 text-xs px-1.5 py-0.5 border border-stone-800 rounded-md"
+              title={t("move_to")}
+            >
+              ⇄
+            </button>
+            {moveOpen && (
+              <div className="absolute right-0 top-6 z-30 bg-[#1c1712] border border-amber-800/40 rounded-xl shadow-2xl py-1 w-40 max-h-64 overflow-y-auto">
+                <p className="px-3 py-1 text-[10px] text-stone-500">{t("move_to")}</p>
+                <button
+                  disabled={item.dayIndex === -1}
+                  onClick={() => { setMoveOpen(false); onMoveTo(-1); }}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-amber-500/10 disabled:opacity-40"
+                >
+                  {t("wishlist")}
+                </button>
+                {Array.from({ length: tripDays }, (_, d) => (
+                  <button
+                    key={d}
+                    disabled={item.dayIndex === d}
+                    onClick={() => { setMoveOpen(false); onMoveTo(d); }}
+                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-amber-500/10 disabled:opacity-40"
+                  >
+                    <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: dayColor(d) }} />
+                    {t("day_n", { n: d + 1 })}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+            <button onClick={() => onMove(-1)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="↑">↑</button>
+            <button onClick={() => onMove(1)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="↓">↓</button>
+            <button onClick={() => setEditing(true)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="✏️">✏️</button>
+            <button onClick={onDelete} className="text-stone-500 hover:text-red-400 text-xs px-1" title={t("del")}>🗑</button>
+          </div>
         </div>
       </div>
     </div>
@@ -494,13 +535,19 @@ export default function Editor() {
               <button onClick={copyShare} className="text-xs text-stone-400 hover:text-amber-300">{t("copy_link")}</button>
             )}
             <button
-              onClick={() => { if (!openPrintView(trip, items, t, lang, weather)) toast(t("print_blocked")); }}
+              onClick={() => {
+                if (isWeChat()) return toast(t("wechat_hint"));
+                if (!openPrintView(trip, items, t, lang, weather)) toast(t("print_blocked"));
+              }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
             >
               {t("export_print")}
             </button>
             <button
-              onClick={() => exportCsv(trip, items, t, lang)}
+              onClick={() => {
+                if (isWeChat()) return toast(t("wechat_hint"));
+                exportCsv(trip, items, t, lang);
+              }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
             >
               {t("export_csv")}
@@ -564,6 +611,8 @@ export default function Editor() {
               key={it.id}
               item={it}
               draggable
+              tripDays={trip.days}
+              onMoveTo={(day) => dropTo(it.id, day)}
               onDelete={() => delItem(it)}
               onSave={(patch) => saveItem(it, patch)}
               onMove={(dir) => moveItem(it, dir)}
@@ -588,6 +637,8 @@ export default function Editor() {
                 key={it.id}
                 item={it}
                 draggable
+                tripDays={trip.days}
+                onMoveTo={(day) => dropTo(it.id, day)}
                 onDelete={() => delItem(it)}
                 onSave={(patch) => saveItem(it, patch)}
                 onMove={(dir) => moveItem(it, dir)}
@@ -603,6 +654,7 @@ export default function Editor() {
         <MapPanel
           items={items}
           focus={focus}
+          onTileFallback={() => toast(t("map_fallback"))}
           onMarkerClick={(itemId) => {
             const it = items.find((x) => x.id === itemId);
             if (it?.lat != null) setFocus({ lat: it.lat, lng: it.lng!, label: it.title });
@@ -673,6 +725,7 @@ export default function Editor() {
                             {it.cost > 0 && <span className="text-xs text-stone-500">¥{it.cost}</span>}
                             {it.verified === "OK" && <span className="text-[10px] text-emerald-400">{t("verified_ok")}</span>}
                             {it.verified === "FAIL" && <span className="text-[10px] text-orange-400">{t("verified_fail")}</span>}
+                            {it.verified === "UNVERIFIED" && <span className="text-[10px] text-stone-400">{t("verified_unverified")}</span>}
                           </div>
                           {it.note && <p className="text-xs text-stone-500 mt-1">{it.note}</p>}
                         </div>

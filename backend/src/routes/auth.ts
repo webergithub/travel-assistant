@@ -72,3 +72,30 @@ authRouter.post("/guest", guestLimiter, async (req, res) => {
 authRouter.get("/me", requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
+
+// 游客升级正式账号（G-DATA-2/PR-P0-4）：同一 user 行补邮箱密码，行程天然无损保留
+authRouter.post("/upgrade", requireAuth, async (req, res) => {
+  const parsed = credsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0].message, code: "VALIDATION" });
+  }
+  const me = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!me) return res.status(401).json({ error: "需要登录", code: "UNAUTHORIZED" });
+  if (!me.isGuest) return res.status(403).json({ error: "仅游客账号可升级", code: "NOT_GUEST" });
+
+  const { email, password, displayName } = parsed.data;
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) return res.status(409).json({ error: "该邮箱已注册", code: "EMAIL_TAKEN" });
+
+  const user = await prisma.user.update({
+    where: { id: me.id },
+    data: {
+      email,
+      passwordHash: await bcrypt.hash(password, 10),
+      displayName: displayName || me.displayName,
+      isGuest: false,
+    },
+  });
+  const pub = { id: user.id, email: user.email, displayName: user.displayName, isGuest: false };
+  res.json({ token: signToken(pub), user: pub });
+});

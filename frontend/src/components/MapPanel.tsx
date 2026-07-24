@@ -13,9 +13,16 @@ interface Props {
   items: Item[]; // 已按 dayIndex/sortOrder 排序；有坐标的才上图
   focus?: MapFocus | null;
   onMarkerClick?: (itemId: string) => void;
+  onTileFallback?: () => void; // 主瓦片源不可达、已切换备用底图时回调（G-MAP-1）
 }
 
-export default function MapPanel({ items, focus, onMarkerClick }: Props) {
+// 主源 Carto 暗色（贴主题）；备用 OSM 官方瓦片（可达性兜底）
+const PRIMARY_TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const FALLBACK_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_ATTR =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
+
+export default function MapPanel({ items, focus, onMarkerClick, onTileFallback }: Props) {
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -23,18 +30,37 @@ export default function MapPanel({ items, focus, onMarkerClick }: Props) {
   const lastFitKeyRef = useRef("");
   const clickRef = useRef(onMarkerClick);
   clickRef.current = onMarkerClick;
+  const onTileFallbackRef = useRef(onTileFallback);
+  onTileFallbackRef.current = onTileFallback;
 
-  // 初始化地图（暗色底图，与 OPC 主题一致）
+  // 初始化地图（暗色底图，与 OPC 主题一致）+ 瓦片健康检测（G-MAP-1）：
+  // 首屏没有任何瓦片成功且出现失败 → 切换备用源并通知；成功过一次即不再干预
   useEffect(() => {
     if (!divRef.current || mapRef.current) return;
     const map = L.map(divRef.current, { zoomControl: true, worldCopyJump: true }).setView([32, 110], 3);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    }).addTo(map);
+    const primary = L.tileLayer(PRIMARY_TILES, { maxZoom: 19, attribution: TILE_ATTR }).addTo(map);
+
+    let anyLoaded = false;
+    let errors = 0;
+    let switched = false;
+    const switchToFallback = () => {
+      if (switched || anyLoaded) return;
+      switched = true;
+      map.removeLayer(primary);
+      L.tileLayer(FALLBACK_TILES, { maxZoom: 19, attribution: TILE_ATTR }).addTo(map);
+      onTileFallbackRef.current?.();
+    };
+    primary.on("tileload", () => { anyLoaded = true; });
+    primary.on("tileerror", () => {
+      errors++;
+      if (errors >= 3) switchToFallback();
+    });
+    const timer = setTimeout(() => { if (errors > 0) switchToFallback(); }, 8000);
+
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     return () => {
+      clearTimeout(timer);
       map.remove();
       mapRef.current = null;
       layerRef.current = null;

@@ -11,6 +11,9 @@ export interface ExportTrip {
 
 type T = (key: string, vars?: Record<string, string | number>) => string;
 
+// 微信内置浏览器：window.open / Blob 下载普遍不可用，调用方应提示改用系统浏览器
+export const isWeChat = () => /MicroMessenger/i.test(navigator.userAgent);
+
 function fmtDate(startDate: string | null, dayIndex: number, lang: string): string {
   if (!startDate) return "";
   const d = new Date(String(startDate).slice(0, 10));

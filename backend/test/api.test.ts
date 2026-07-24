@@ -171,6 +171,37 @@ test("AI：无 key 402；demo 模式返回演示草稿不核验", async () => {
   assert.ok(String(demo.body.tips[0]).includes("演示"));
 });
 
+test("游客升级正式账号：行程无损保留，重复邮箱 409，非游客 403（G-DATA-2）", async () => {
+  const g = (await req("/auth/guest", { method: "POST", body: "{}" })).body;
+  const trip1 = (await req("/trips", { method: "POST", body: JSON.stringify({ title: "升级前A", destination: "d", days: 1 }) }, g.token)).body.trip;
+  const trip2 = (await req("/trips", { method: "POST", body: JSON.stringify({ title: "升级前B", destination: "d", days: 1 }) }, g.token)).body.trip;
+
+  const email = `up${Date.now()}@t.dev`;
+  const up = await req("/auth/upgrade", { method: "POST", body: JSON.stringify({ email, password: "secret1", displayName: "升级号" }) }, g.token);
+  assert.equal(up.status, 200);
+  assert.equal(up.body.user.isGuest, false);
+  assert.equal(up.body.user.id, g.user.id); // 同一账号，非新建
+
+  // 用新邮箱密码重新登录，两个行程都在
+  const login = await req("/auth/login", { method: "POST", body: JSON.stringify({ email, password: "secret1" }) });
+  assert.equal(login.status, 200);
+  const list = await req("/trips", {}, login.body.token);
+  const titles = list.body.trips.map((x: any) => x.title).sort();
+  assert.ok(titles.includes("升级前A") && titles.includes("升级前B"));
+
+  // 已是正式账号再升级 → 403
+  const again = await req("/auth/upgrade", { method: "POST", body: JSON.stringify({ email: `x${email}`, password: "secret1" }) }, login.body.token);
+  assert.equal(again.status, 403);
+  assert.equal(again.body.code, "NOT_GUEST");
+
+  // 另一游客用已占用邮箱升级 → 409
+  const g2 = (await req("/auth/guest", { method: "POST", body: "{}" })).body;
+  const dup = await req("/auth/upgrade", { method: "POST", body: JSON.stringify({ email, password: "secret1" }) }, g2.token);
+  assert.equal(dup.status, 409);
+  assert.equal(dup.body.code, "EMAIL_TAKEN");
+  void trip1; void trip2;
+});
+
 test("places 参数校验不打外网", async () => {
   const r = await req("/places/search?q=");
   assert.equal(r.status, 400);

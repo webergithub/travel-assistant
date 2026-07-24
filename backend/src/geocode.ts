@@ -60,15 +60,18 @@ export async function searchPlaces(q: string, limit = 6): Promise<GeoPlace[]> {
   return results;
 }
 
-// AI 地点核验：找到 → {ok:true, 坐标}；找不到 → {ok:false}
+// AI 地点核验三态（G-MAP-2）：OK=找到 / NOT_FOUND=地图查无此地 / UNVERIFIED=核验服务不可用
+// 区分后两者，避免把「服务故障」冤枉成「地点不存在」误导用户删除真实地点
+export type VerifyStatus = "OK" | "NOT_FOUND" | "UNVERIFIED";
+
 export async function verifyPlace(
   searchQuery: string
-): Promise<{ ok: boolean; place?: GeoPlace }> {
+): Promise<{ status: VerifyStatus; place?: GeoPlace }> {
   try {
     const results = await searchPlaces(searchQuery, 1);
-    if (results.length > 0) return { ok: true, place: results[0] };
-    return { ok: false };
+    if (results.length > 0) return { status: "OK", place: results[0] };
+    return { status: "NOT_FOUND" };
   } catch {
-    return { ok: false }; // 网络失败视为未核验而非核验失败？——保守起见标 FAIL 由调用方决定
+    return { status: "UNVERIFIED" };
   }
 }

@@ -71,20 +71,22 @@ aiRouter.post("/itinerary", async (req, res) => {
         lat: null as number | null,
         lng: null as number | null,
         address: "",
-        verified: "NONE" as "NONE" | "OK" | "FAIL",
+        verified: "NONE" as "NONE" | "OK" | "FAIL" | "UNVERIFIED",
       };
       if (!base.title) continue;
       if (!isDemo && VERIFIABLE.has(base.type) && verifiedCount < MAX_VERIFY) {
         verifiedCount++;
         const q = String(it.searchQuery || `${base.title} ${parsed.data.destination}`).slice(0, 120);
         const v = await verifyPlace(q);
-        if (v.ok && v.place) {
+        if (v.status === "OK" && v.place) {
           base.verified = "OK";
           base.lat = v.place.lat;
           base.lng = v.place.lng;
           base.address = v.place.displayName.slice(0, 300);
+        } else if (v.status === "NOT_FOUND") {
+          base.verified = "FAIL"; // 地图确实查无此地
         } else {
-          base.verified = "FAIL";
+          base.verified = "UNVERIFIED"; // 核验服务不可用，非地点问题
         }
       }
       items.push(base);

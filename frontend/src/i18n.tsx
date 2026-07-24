@@ -143,6 +143,17 @@ const ZH: Dict = {
   print_blocked: "浏览器拦截了打印窗口，请允许弹窗后重试",
   copy_manual: "自动复制失败，请手动复制链接",
   moved_wish: "已把超出天数的 {n} 项安排移回想去清单",
+
+  // E1：触屏移动 / 游客升级 / 地图降级 / 核验三态 / 微信
+  move_to: "移动到…",
+  verified_unverified: "⏳ 暂未核验",
+  upgrade_btn: "⬆ 升级账号",
+  upgrade_title: "升级为正式账号",
+  upgrade_desc: "补一个邮箱和密码即可：行程全部保留，之后可在任何设备登录。",
+  upgrade_ok: "升级成功！现在可以用邮箱在任何设备登录了",
+  err_NOT_GUEST: "当前已是正式账号",
+  map_fallback: "默认地图源不可达，已切换备用底图",
+  wechat_hint: "微信内置浏览器不支持此功能，请点右上角 ··· 选「在浏览器打开」",
 };
 
 const EN: Dict = {
@@ -272,6 +283,16 @@ const EN: Dict = {
   print_blocked: "The print window was blocked — allow pop-ups and retry",
   copy_manual: "Auto-copy failed — please copy the link manually",
   moved_wish: "Moved {n} item(s) beyond the new length back to the wishlist",
+
+  move_to: "Move to…",
+  verified_unverified: "⏳ Not verified yet",
+  upgrade_btn: "⬆ Upgrade account",
+  upgrade_title: "Upgrade to a full account",
+  upgrade_desc: "Just add an email and password — all trips are kept, and you can sign in from any device.",
+  upgrade_ok: "Upgraded! You can now sign in with your email on any device",
+  err_NOT_GUEST: "This is already a full account",
+  map_fallback: "Default map source unreachable — switched to fallback tiles",
+  wechat_hint: "WeChat's built-in browser doesn't support this — tap ··· and choose “Open in browser”",
 };
 
 const DICTS: Record<Lang, Dict> = { zh: ZH, en: EN };

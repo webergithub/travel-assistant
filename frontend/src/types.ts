@@ -1,5 +1,5 @@
 export type ItemType = "SIGHT" | "FOOD" | "HOTEL" | "TRANSPORT" | "NOTE";
-export type Verified = "NONE" | "OK" | "FAIL";
+export type Verified = "NONE" | "OK" | "FAIL" | "UNVERIFIED";
 
 export interface PublicUser {
   id: string;

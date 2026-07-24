@@ -27,7 +27,7 @@ const itemSchema = z.object({
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
   address: z.string().max(300).default(""),
-  verified: z.enum(["NONE", "OK", "FAIL"]).default("NONE"),
+  verified: z.enum(["NONE", "OK", "FAIL", "UNVERIFIED"]).default("NONE"),
   source: z.enum(["USER", "AI"]).default("USER"),
 });
 

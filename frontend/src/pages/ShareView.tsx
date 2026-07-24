@@ -5,7 +5,7 @@ import { useI18n } from "../i18n";
 import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
 import { useTripWeather } from "../components/useWeather";
-import { exportCsv, openPrintView } from "../export";
+import { exportCsv, isWeChat, openPrintView } from "../export";
 import { dayColor, TYPE_ICONS, weatherText, type Item } from "../types";
 
 interface SharedTrip {
@@ -73,13 +73,19 @@ export default function ShareView() {
           </p>
           <div className="flex items-center gap-2 mt-2">
             <button
-              onClick={() => { if (!openPrintView(trip, items, t, lang, weather)) toast(t("print_blocked")); }}
+              onClick={() => {
+                if (isWeChat()) return toast(t("wechat_hint"));
+                if (!openPrintView(trip, items, t, lang, weather)) toast(t("print_blocked"));
+              }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
             >
               {t("export_print")}
             </button>
             <button
-              onClick={() => exportCsv(trip, items, t, lang)}
+              onClick={() => {
+                if (isWeChat()) return toast(t("wechat_hint"));
+                exportCsv(trip, items, t, lang);
+              }}
               className="px-3 py-1.5 rounded-lg border border-stone-700 text-stone-300 hover:border-amber-700/50 text-xs"
             >
               {t("export_csv")}
@@ -116,7 +122,7 @@ export default function ShareView() {
         ))}
       </div>
       <div className="flex-1 h-[320px] lg:h-auto">
-        <MapPanel items={items} focus={focus} />
+        <MapPanel items={items} focus={focus} onTileFallback={() => toast(t("map_fallback"))} />
       </div>
     </div>
   );
@@ -135,6 +141,7 @@ function ReadonlyCard({ item, onFocus }: { item: Item; onFocus: (f: MapFocus) =>
         <span className="font-medium text-sm">{item.title}</span>
         {item.cost > 0 && <span className="text-xs text-stone-400">¥{item.cost}</span>}
         {item.verified === "OK" && <span className="text-[10px] text-emerald-400">{t("verified_ok")}</span>}
+        {item.verified === "UNVERIFIED" && <span className="text-[10px] text-stone-400">{t("verified_unverified")}</span>}
       </div>
       {item.note && <p className="text-xs text-stone-400 mt-1">{item.note}</p>}
     </div>

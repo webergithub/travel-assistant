@@ -56,6 +56,8 @@ export const api = {
     request<{ token: string; user: PublicUser }>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
   guest: (lang: string) =>
     request<{ token: string; user: PublicUser }>("/auth/guest", { method: "POST", body: JSON.stringify({ lang }) }),
+  upgrade: (body: { email: string; password: string; displayName?: string }) =>
+    request<{ token: string; user: PublicUser }>("/auth/upgrade", { method: "POST", body: JSON.stringify(body) }),
 
   listTrips: () => request<{ trips: Trip[] }>("/trips"),
   createTrip: (body: { title: string; destination: string; days: number; startDate?: string | null }) =>
