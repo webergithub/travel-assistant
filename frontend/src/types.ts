@@ -15,10 +15,43 @@ export interface Trip {
   startDate: string | null;
   days: number;
   notes: string;
+  currency: string;
   shareSlug: string | null;
   updatedAt: string;
   _count?: { items: number };
 }
+
+export type PackCategory = "DOCS" | "CLOTHES" | "ELECTRONICS" | "TOILETRIES" | "MEDS" | "OTHER";
+export interface PackItem {
+  id: string;
+  text: string;
+  checked: boolean;
+  category: PackCategory;
+  sortOrder: number;
+  source: "USER" | "AI";
+}
+
+// 常用币种符号
+export const CURRENCIES: { code: string; symbol: string; label: string }[] = [
+  { code: "CNY", symbol: "¥", label: "人民币 CNY" },
+  { code: "USD", symbol: "$", label: "美元 USD" },
+  { code: "JPY", symbol: "¥", label: "日元 JPY" },
+  { code: "EUR", symbol: "€", label: "欧元 EUR" },
+  { code: "GBP", symbol: "£", label: "英镑 GBP" },
+  { code: "KRW", symbol: "₩", label: "韩元 KRW" },
+  { code: "THB", symbol: "฿", label: "泰铢 THB" },
+  { code: "HKD", symbol: "HK$", label: "港币 HKD" },
+];
+export const curSymbol = (code: string) => CURRENCIES.find((c) => c.code === code)?.symbol || code + " ";
+
+export const PACK_CATS: { key: PackCategory; icon: string }[] = [
+  { key: "DOCS", icon: "🪪" },
+  { key: "CLOTHES", icon: "👕" },
+  { key: "ELECTRONICS", icon: "🔌" },
+  { key: "TOILETRIES", icon: "🧴" },
+  { key: "MEDS", icon: "💊" },
+  { key: "OTHER", icon: "📦" },
+];
 
 export interface Item {
   id: string;

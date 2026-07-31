@@ -6,7 +6,9 @@ import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
 import { useTripWeather } from "../components/useWeather";
 import { exportCsv, isWeChat, openPrintView } from "../export";
-import { dayColor, TYPE_ICONS, weatherText, type Item } from "../types";
+import BudgetSummary from "../components/BudgetSummary";
+import { amapUrl } from "../nav";
+import { curSymbol, dayColor, TYPE_ICONS, weatherText, type Item } from "../types";
 
 interface SharedTrip {
   title: string;
@@ -14,6 +16,7 @@ interface SharedTrip {
   days: number;
   startDate: string | null;
   notes: string;
+  currency: string;
   ownerName: string;
 }
 
@@ -93,12 +96,14 @@ export default function ShareView() {
           </div>
         </div>
 
+        <BudgetSummary items={items} currency={trip.currency} />
+
         {(byDay.get(-1) || []).length > 0 && (
           <section className="rounded-2xl border border-stone-800/80 bg-[#100d0a] p-3">
             <h3 className="font-semibold text-sm mb-2 px-1">{t("wishlist")}</h3>
             <div className="space-y-2">
               {(byDay.get(-1) || []).map((it) => (
-                <ReadonlyCard key={it.id} item={it} onFocus={setFocus} />
+                <ReadonlyCard key={it.id} item={it} sym={curSymbol(trip.currency)} onFocus={setFocus} />
               ))}
             </div>
           </section>
@@ -115,7 +120,7 @@ export default function ShareView() {
             </header>
             <div className="space-y-2">
               {(byDay.get(d) || []).map((it) => (
-                <ReadonlyCard key={it.id} item={it} onFocus={setFocus} />
+                <ReadonlyCard key={it.id} item={it} sym={curSymbol(trip.currency)} onFocus={setFocus} />
               ))}
             </div>
           </section>
@@ -128,20 +133,32 @@ export default function ShareView() {
   );
 }
 
-function ReadonlyCard({ item, onFocus }: { item: Item; onFocus: (f: MapFocus) => void }) {
+function ReadonlyCard({ item, sym, onFocus }: { item: Item; sym: string; onFocus: (f: MapFocus) => void }) {
   const { t } = useI18n();
   return (
     <div
       onClick={() => item.lat != null && onFocus({ lat: item.lat, lng: item.lng!, label: item.title })}
-      className="border border-stone-800 rounded-xl p-3 bg-[#14110d] cursor-pointer hover:border-amber-700/40"
+      className="group border border-stone-800 rounded-xl p-3 bg-[#14110d] cursor-pointer hover:border-amber-700/40"
     >
       <div className="flex items-center gap-2 flex-wrap">
         <span>{TYPE_ICONS[item.type]}</span>
         {item.startTime && <span className="mono text-xs text-amber-300">{item.startTime}</span>}
         <span className="font-medium text-sm">{item.title}</span>
-        {item.cost > 0 && <span className="text-xs text-stone-400">¥{item.cost}</span>}
+        {item.cost > 0 && <span className="text-xs text-stone-400">{sym}{item.cost}</span>}
         {item.verified === "OK" && <span className="text-[10px] text-emerald-400">{t("verified_ok")}</span>}
         {item.verified === "UNVERIFIED" && <span className="text-[10px] text-stone-400">{t("verified_unverified")}</span>}
+        {item.lat != null && (
+          <a
+            href={amapUrl(item.lat, item.lng!, item.title)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="ml-auto opacity-0 group-hover:opacity-100 text-stone-500 hover:text-amber-300 text-xs"
+            title={t("nav_here")}
+          >
+            🧭
+          </a>
+        )}
       </div>
       {item.note && <p className="text-xs text-stone-400 mt-1">{item.note}</p>}
     </div>

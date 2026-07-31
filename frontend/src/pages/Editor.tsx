@@ -6,7 +6,10 @@ import { useToast } from "../components/toast";
 import MapPanel, { type MapFocus } from "../components/MapPanel";
 import { useTripWeather } from "../components/useWeather";
 import { exportCsv, isWeChat, openPrintView } from "../export";
-import { dayColor, TYPE_ICONS, weatherText, type AiDraft, type GeoPlace, type Item, type ItemType, type Trip } from "../types";
+import BudgetSummary from "../components/BudgetSummary";
+import PackingPanel from "../components/PackingPanel";
+import { amapUrl, gmapUrl } from "../nav";
+import { CURRENCIES, curSymbol, dayColor, TYPE_ICONS, weatherText, type AiDraft, type GeoPlace, type Item, type ItemType, type Trip } from "../types";
 
 const TYPES: ItemType[] = ["SIGHT", "FOOD", "HOTEL", "TRANSPORT", "NOTE"];
 
@@ -26,6 +29,7 @@ function ItemCard({
   onMove,
   onMoveTo,
   tripDays,
+  sym,
   draggable,
 }: {
   item: Item;
@@ -35,6 +39,7 @@ function ItemCard({
   onMove: (dir: -1 | 1) => void;
   onMoveTo: (dayIndex: number) => void; // 触屏友好的跨天移动（G-MOB-1）
   tripDays: number;
+  sym: string; // 币种符号
   draggable: boolean;
 }) {
   const { t } = useI18n();
@@ -118,7 +123,7 @@ function ItemCard({
           <div className="flex items-center gap-2 flex-wrap">
             {item.startTime && <span className="mono text-xs text-amber-300">{item.startTime}</span>}
             <span className="font-medium text-sm">{item.title}</span>
-            {item.cost > 0 && <span className="text-xs text-stone-400">¥{item.cost}</span>}
+            {item.cost > 0 && <span className="text-xs text-stone-400">{sym}{item.cost}</span>}
             {item.source === "AI" && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 border border-purple-700/30">{t("from_ai")}</span>
             )}
@@ -163,6 +168,18 @@ function ItemCard({
             )}
           </div>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+            {item.lat != null && (
+              <a
+                href={amapUrl(item.lat, item.lng!, item.title)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-stone-500 hover:text-amber-300 text-xs px-1"
+                title={`${t("nav_here")} · ${t("nav_amap")}`}
+              >
+                🧭
+              </a>
+            )}
             <button onClick={() => onMove(-1)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="↑">↑</button>
             <button onClick={() => onMove(1)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="↓">↓</button>
             <button onClick={() => setEditing(true)} className="text-stone-500 hover:text-amber-300 text-xs px-1" title="✏️">✏️</button>
@@ -285,6 +302,9 @@ export default function Editor() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiDraft | null>(null);
 
+  const [tab, setTab] = useState<"plan" | "packing">("plan");
+  const [focusDay, setFocusDay] = useState<number | null>(null); // 非空=当日聚焦（PR-P2-3）
+
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -308,9 +328,9 @@ export default function Editor() {
     return m;
   }, [items]);
 
-  const budget = useMemo(() => items.filter((i) => i.dayIndex >= 0).reduce((s, i) => s + i.cost, 0), [items]);
   const { data: weather, failed: weatherFailed } = useTripWeather(trip?.destination || "", trip?.startDate || null, trip?.days || 0);
   const err = (e: any) => apiErrText(e, t);
+  const sym = curSymbol(trip?.currency || "CNY");
 
   if (!trip) return <p className="text-stone-500 p-10">{t("loading")}</p>;
 
@@ -515,11 +535,20 @@ export default function Editor() {
               }}
               className="bg-black/40 border border-stone-700 rounded px-1.5 py-0.5 text-xs"
             />
-            {budget > 0 && (
-              <span className="text-amber-300">
-                {t("total_budget")} ¥{Math.round(budget)}
-              </span>
-            )}
+            <label className="flex items-center gap-1" title={t("currency_label")}>
+              <select
+                value={trip.currency}
+                onChange={(e) => {
+                  setTrip((prev) => ({ ...prev!, currency: e.target.value }));
+                  saveTrip({ currency: e.target.value });
+                }}
+                className="bg-black/40 border border-stone-700 rounded px-1.5 py-0.5 text-xs"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.symbol} {c.code}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setAiOpen(true)} className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-black text-xs font-semibold">
@@ -554,6 +583,46 @@ export default function Editor() {
             </button>
             {weatherFailed && <span className="text-[11px] text-stone-500">{t("weather_unavail")}</span>}
           </div>
+          {/* Tab：行程 / 打包清单 */}
+          <div className="flex gap-1 border-b border-stone-800 pt-1">
+            {(["plan", "packing"] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? "border-amber-500 text-amber-300" : "border-transparent text-stone-400 hover:text-stone-200"}`}
+              >
+                {t(k === "plan" ? "tab_plan" : "tab_packing")}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tab === "packing" ? (
+          <PackingPanel tripId={trip.id} />
+        ) : (
+        <>
+        {/* 预算汇总 */}
+        <BudgetSummary items={items} currency={trip.currency} />
+
+        {/* 当日聚焦切换 */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <button
+            onClick={() => setFocusDay(focusDay === null ? 0 : null)}
+            className={`px-2.5 py-1 rounded-lg border ${focusDay !== null ? "border-amber-600/60 text-amber-300" : "border-stone-700 text-stone-400 hover:border-amber-700/50"}`}
+          >
+            {focusDay !== null ? t("all_days") : t("today_focus")}
+          </button>
+          {focusDay !== null &&
+            Array.from({ length: trip.days }, (_, d) => (
+              <button
+                key={d}
+                onClick={() => setFocusDay(d)}
+                className={`px-2 py-1 rounded-md ${focusDay === d ? "bg-amber-600/80 text-black" : "text-stone-400 hover:text-amber-300"}`}
+              >
+                <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: dayColor(d) }} />
+                {d + 1}
+              </button>
+            ))}
         </div>
 
         {/* 地点搜索 */}
@@ -612,6 +681,7 @@ export default function Editor() {
               item={it}
               draggable
               tripDays={trip.days}
+              sym={sym}
               onMoveTo={(day) => dropTo(it.id, day)}
               onDelete={() => delItem(it)}
               onSave={(patch) => saveItem(it, patch)}
@@ -621,8 +691,10 @@ export default function Editor() {
           )}
         </DaySection>
 
-        {/* 逐日 */}
-        {Array.from({ length: trip.days }, (_, d) => (
+        {/* 逐日（当日聚焦时只显示选中天） */}
+        {Array.from({ length: trip.days }, (_, d) => d)
+          .filter((d) => focusDay === null || d === focusDay)
+          .map((d) => (
           <DaySection
             key={d}
             dayIndex={d}
@@ -638,6 +710,7 @@ export default function Editor() {
                 item={it}
                 draggable
                 tripDays={trip.days}
+                sym={sym}
                 onMoveTo={(day) => dropTo(it.id, day)}
                 onDelete={() => delItem(it)}
                 onSave={(patch) => saveItem(it, patch)}
@@ -647,6 +720,8 @@ export default function Editor() {
             )}
           </DaySection>
         ))}
+        </>
+        )}
       </div>
 
       {/* 右栏：地图 */}

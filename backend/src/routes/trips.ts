@@ -15,6 +15,7 @@ const tripSchema = z.object({
   days: z.number().int().min(1).max(30),
   startDate: z.string().nullable().optional(), // "2026-08-01"
   notes: z.string().max(5000).optional(),
+  currency: z.string().min(1).max(8).optional(), // 币种代码 CNY/USD/...
 });
 
 const itemSchema = z.object({

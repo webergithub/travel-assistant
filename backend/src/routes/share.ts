@@ -21,6 +21,7 @@ shareRouter.get("/:slug", async (req, res) => {
       days: trip.days,
       startDate: trip.startDate,
       notes: trip.notes,
+      currency: trip.currency,
       ownerName: trip.owner.displayName,
     },
     items,

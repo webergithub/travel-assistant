@@ -202,6 +202,44 @@ test("游客升级正式账号：行程无损保留，重复邮箱 409，非游�
   void trip1; void trip2;
 });
 
+test("打包清单：增删改查 + demo 生成去重 + 币种更新（E2）", async () => {
+  const tk = (await req("/auth/guest", { method: "POST", body: "{}" })).body.token;
+  const trip = (await req("/trips", { method: "POST", body: JSON.stringify({ title: "打包测试", destination: "北海道", days: 4 }) }, tk)).body.trip;
+  assert.equal(trip.currency, "CNY"); // 默认币种
+
+  // 币种更新
+  const cur = await req(`/trips/${trip.id}`, { method: "PUT", body: JSON.stringify({ currency: "JPY" }) }, tk);
+  assert.equal(cur.body.trip.currency, "JPY");
+
+  // 手动加项
+  const add = await req(`/packing/${trip.id}`, { method: "POST", body: JSON.stringify({ text: "护照", category: "DOCS" }) }, tk);
+  assert.equal(add.status, 200);
+  const pid = add.body.item.id;
+
+  // 勾选
+  const chk = await req(`/packing/${trip.id}/${pid}`, { method: "PUT", body: JSON.stringify({ checked: true }) }, tk);
+  assert.equal(chk.body.item.checked, true);
+
+  // demo 生成（无 key 也能出清单），去重：已有"护照"类文字不重复
+  const gen = await req(`/packing/${trip.id}/generate`, { method: "POST", body: JSON.stringify({ lang: "zh", demo: true }) }, tk);
+  assert.equal(gen.status, 200);
+  assert.ok(gen.body.items.length > 1);
+  assert.ok(gen.body.added >= 1);
+
+  // 列表读取
+  const list = await req(`/packing/${trip.id}`, {}, tk);
+  assert.ok(list.body.items.some((x: any) => x.text === "护照"));
+
+  // 删除
+  const del = await req(`/packing/${trip.id}/${pid}`, { method: "DELETE" }, tk);
+  assert.equal(del.body.ok, true);
+
+  // 属主隔离：他人无法读
+  const other = (await req("/auth/guest", { method: "POST", body: "{}" })).body.token;
+  const forbidden = await req(`/packing/${trip.id}`, {}, other);
+  assert.equal(forbidden.status, 404);
+});
+
 test("places 参数校验不打外网", async () => {
   const r = await req("/places/search?q=");
   assert.equal(r.status, 400);

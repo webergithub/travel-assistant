@@ -26,6 +26,7 @@ model Trip {
   startDate   DateTime?
   days        Int       @default(3)
   notes       String    @default("")
+  currency    String    @default("CNY") // 预算币种：CNY/USD/JPY/EUR/... （单币种记账）
   shareSlug   String?   @unique // 非空 = 已开启只读分享
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -33,9 +34,25 @@ model Trip {
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id])
 
-  items ItineraryItem[]
+  items       ItineraryItem[]
+  packingItems PackingItem[]
 
   @@index([ownerId])
+}
+
+// 行前打包 / 待办清单项
+model PackingItem {
+  id        String  @id @default(cuid())
+  text      String
+  checked   Boolean @default(false)
+  category  String  @default("OTHER") // DOCS 证件 | CLOTHES 衣物 | ELECTRONICS 电子 | TOILETRIES 洗漱 | MEDS 药品 | OTHER 其他
+  sortOrder Int     @default(0)
+  source    String  @default("USER") // USER | AI
+
+  tripId String
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 // 行程项：dayIndex = -1 表示「想去清单」，0..n-1 表示第几天

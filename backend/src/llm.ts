@@ -71,6 +71,71 @@ export function mockItinerary(destination: string, days: number, lang: "zh" | "e
   };
 }
 
+// —— 打包清单 ——
+export interface PackingLine {
+  text: string;
+  category: "DOCS" | "CLOTHES" | "ELECTRONICS" | "TOILETRIES" | "MEDS" | "OTHER";
+}
+export interface PackingRequest {
+  destination: string;
+  days: number;
+  month?: number;
+  lang: "zh" | "en";
+  userApiKey?: string;
+  demo?: boolean;
+}
+
+// 演示兜底：无 key 时给一份通用清单（标注演示）
+function mockPacking(lang: "zh" | "en"): PackingLine[] {
+  const zh = lang === "zh";
+  return [
+    { text: zh ? "身份证 / 护照" : "ID / passport", category: "DOCS" },
+    { text: zh ? "手机 + 充电器" : "Phone + charger", category: "ELECTRONICS" },
+    { text: zh ? "充电宝" : "Power bank", category: "ELECTRONICS" },
+    { text: zh ? "换洗衣物" : "Change of clothes", category: "CLOTHES" },
+    { text: zh ? "牙刷牙膏" : "Toothbrush & paste", category: "TOILETRIES" },
+    { text: zh ? "常用药 / 创可贴" : "Basic meds / band-aids", category: "MEDS" },
+    { text: zh ? "（演示清单，未调用 AI）" : "(Demo list — no AI call)", category: "OTHER" },
+  ];
+}
+
+export async function generatePacking(req: PackingRequest): Promise<PackingLine[]> {
+  if (req.demo) return mockPacking(req.lang);
+  const client = resolveClient(req.userApiKey);
+  const zh = req.lang === "zh";
+  const system = zh
+    ? `你是资深旅行打包助手。根据目的地、天数、出行月份，列出精炼实用的行前打包清单。
+规则：只输出 JSON 对象，无 markdown 围栏无解释；15-30 项；按目的地气候与季节调整（如冬季羽绒、雨季雨具）；每项归类到 category。
+JSON：{"items":[{"text":"物品名","category":"DOCS|CLOTHES|ELECTRONICS|TOILETRIES|MEDS|OTHER"}]}`
+    : `You are a seasoned travel packing assistant. List a concise, practical pre-trip packing list from destination, days and month.
+Rules: output ONE JSON object only, no fences no prose; 15-30 items; adapt to the destination's climate/season; classify each into category.
+JSON: {"items":[{"text":"item","category":"DOCS|CLOTHES|ELECTRONICS|TOILETRIES|MEDS|OTHER"}]}`;
+  const userText = zh
+    ? `目的地：${req.destination}\n天数：${req.days}\n出行月份：${req.month || "未知"}\n请生成打包清单 JSON。`
+    : `Destination: ${req.destination}\nDays: ${req.days}\nMonth: ${req.month || "unknown"}\nGenerate the packing list JSON.`;
+
+  const stream = client.messages.stream({
+    model: DEFAULT_MODEL,
+    max_tokens: 2000,
+    system,
+    messages: [{ role: "user", content: userText }],
+  });
+  const message = await stream.finalMessage();
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  let parsed: { items?: PackingLine[] };
+  try {
+    parsed = JSON.parse(stripCodeFence(text));
+  } catch {
+    const err: any = new Error("bad json");
+    err.code = "BAD_AI_JSON";
+    throw err;
+  }
+  return Array.isArray(parsed.items) ? parsed.items : [];
+}
+
 // 用户自带 key 优先；兼容普通 API Key 与 OAuth 订阅令牌
 function resolveClient(userApiKey?: string): Anthropic {
   const key = userApiKey || process.env.ANTHROPIC_API_KEY;

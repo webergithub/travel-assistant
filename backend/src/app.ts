@@ -10,6 +10,7 @@ import { placesRouter } from "./routes/places.js";
 import { shareRouter } from "./routes/share.js";
 import { aiRouter } from "./routes/ai.js";
 import { weatherRouter } from "./routes/weather.js";
+import { packingRouter } from "./routes/packing.js";
 
 // 组装 Express 应用（不监听端口，便于测试注入）
 export function createApp() {
@@ -41,6 +42,7 @@ export function createApp() {
   app.use("/api/share", shareRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/weather", weatherRouter);
+  app.use("/api/packing", packingRouter);
 
   // 生产环境：同进程托管已构建前端（public/），非 /api 请求回退 index.html（配合 HashRouter）
   const publicDir = path.join(process.cwd(), "public");

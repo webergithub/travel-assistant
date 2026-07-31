@@ -1,5 +1,5 @@
 // 统一 API 客户端：自动带 JWT 与（可选）用户自带 LLM key
-import type { AiDraft, DayWeather, GeoPlace, Item, PublicUser, Trip } from "./types";
+import type { AiDraft, DayWeather, GeoPlace, Item, PackItem, PublicUser, Trip } from "./types";
 
 const TOKEN_KEY = "tripmate_token";
 const USER_KEY = "tripmate_user";
@@ -63,7 +63,7 @@ export const api = {
   createTrip: (body: { title: string; destination: string; days: number; startDate?: string | null }) =>
     request<{ trip: Trip }>("/trips", { method: "POST", body: JSON.stringify(body) }),
   getTrip: (id: string) => request<{ trip: Trip; items: Item[] }>(`/trips/${id}`),
-  updateTrip: (id: string, body: Partial<Pick<Trip, "title" | "destination" | "days" | "notes"> & { startDate: string | null }>) =>
+  updateTrip: (id: string, body: Partial<Pick<Trip, "title" | "destination" | "days" | "notes" | "currency"> & { startDate: string | null }>) =>
     request<{ trip: Trip; movedToWishlist?: number }>(`/trips/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteTrip: (id: string) => request<{ ok: boolean }>(`/trips/${id}`, { method: "DELETE" }),
   shareTrip: (id: string, enable: boolean) =>
@@ -85,8 +85,26 @@ export const api = {
   weather: (lat: number, lng: number, start: string, days: number) =>
     request<{ days: (DayWeather | null)[] }>(`/weather?lat=${lat}&lng=${lng}&start=${start}&days=${days}`),
 
+  listPacking: (tripId: string) => request<{ items: PackItem[] }>(`/packing/${tripId}`),
+  addPacking: (tripId: string, body: { text: string; category?: string }) =>
+    request<{ item: PackItem }>(`/packing/${tripId}`, { method: "POST", body: JSON.stringify(body) }),
+  updatePacking: (tripId: string, itemId: string, body: Partial<Pick<PackItem, "text" | "checked" | "category">>) =>
+    request<{ item: PackItem }>(`/packing/${tripId}/${itemId}`, { method: "PUT", body: JSON.stringify(body) }),
+  deletePacking: (tripId: string, itemId: string) =>
+    request<{ ok: boolean }>(`/packing/${tripId}/${itemId}`, { method: "DELETE" }),
+  generatePacking: (tripId: string, lang: "zh" | "en", demo?: boolean) => {
+    const headers: Record<string, string> = {};
+    const k = store.getApiKey();
+    if (k) headers["x-user-api-key"] = k;
+    return request<{ items: PackItem[]; added: number; demo: boolean }>(`/packing/${tripId}/generate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ lang, ...(demo ? { demo: true } : {}) }),
+    });
+  },
+
   getShared: (slug: string) =>
-    request<{ trip: { title: string; destination: string; days: number; startDate: string | null; notes: string; ownerName: string }; items: Item[] }>(
+    request<{ trip: { title: string; destination: string; days: number; startDate: string | null; notes: string; currency: string; ownerName: string }; items: Item[] }>(
       `/share/${slug}`
     ),
 
